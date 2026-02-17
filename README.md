@@ -1,36 +1,145 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+﻿# Ashkar
 
-## Getting Started
+سامانه ثبت شفاف تراکنش های مالی با تمرکز روی یکپارچگی داده ها (Hash Chain)، گزارش گیری، و پنل مدیریت.
 
-First, run the development server:
+## معرفی پروژه
+`Ashkar` یک پروژه مبتنی بر `Next.js` (App Router) و `Prisma + PostgreSQL` است که امکانات زیر را فراهم می کند:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- ثبت تراکنش مالی (درآمد/هزینه)
+- نگهداری زنجیره هش برای تشخیص دستکاری
+- داشبورد آماری و گزارش های نموداری
+- خروجی CSV و JSON
+- پنل مدیریت برای لاگین ادمین، مدیریت کاربران و تراکنش ها
+
+## تکنولوژی ها
+
+- `Next.js 16` + `React 19`
+- `TypeScript`
+- `Prisma 7` + `@prisma/adapter-pg`
+- `PostgreSQL`
+- `Zod` برای اعتبارسنجی ورودی
+- `bcrypt` برای هش رمز عبور
+- `Tailwind CSS 4` + `shadcn/ui`
+- `Recharts` برای نمودار
+
+## ساختار پروژه
+
+```text
+app/
+  api/
+    admin/...
+    reports/...
+    export/...
+    transactions/
+    verify/
+  admin/...
+  dashboard/
+  transactions/
+  reports/
+  export/
+  verify/
+components/
+lib/
+  admin-auth.ts
+  user-service.ts
+  transaction-service.ts
+  hash-chain.ts
+  export-service.ts
+prisma/
+  schema.prisma
+  migrations/
+scripts/
+  create-admin.ts
+  test-db.ts
+docs/
+  API.md
+  ARCHITECTURE.md
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## پیش نیازها
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `Node.js` نسخه 20 یا بالاتر
+- `pnpm`
+- `PostgreSQL` در حال اجرا
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## راه اندازی سریع
 
-## Learn More
+1. نصب وابستگی ها
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+pnpm install
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+2. تنظیم متغیر محیطی در `.env`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```env
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DB_NAME?schema=public"
+```
 
-## Deploy on Vercel
+3. اجرای Migration ها
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+pnpm exec prisma migrate dev
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+4. ساخت ادمین اولیه
+
+```bash
+pnpm run admin:create -- --username admin --email admin@example.com --password StrongPass123
+```
+
+5. اجرای پروژه
+
+```bash
+pnpm dev
+```
+
+پروژه روی `http://localhost:3000` در دسترس است.
+
+## دستورات اصلی
+
+- `pnpm dev` اجرای توسعه
+- `pnpm build` بیلد تولید
+- `pnpm start` اجرای نسخه تولید
+- `pnpm lint` بررسی ESLint
+- `pnpm run db:test` تست اتصال دیتابیس
+- `pnpm run admin:create -- --username ... --email ... --password ...` ساخت/به روزرسانی ادمین
+
+## مسیرهای اصلی UI
+
+- `/dashboard` داشبورد
+- `/transactions` لیست تراکنش ها
+- `/reports` گزارش های آماری
+- `/verify` تایید صحت زنجیره
+- `/export` خروجی عمومی
+- `/admin/login` ورود ادمین
+- `/admin` داشبورد ادمین
+- `/admin/users` مدیریت کاربران
+- `/admin/transactions` مدیریت تراکنش ها
+- `/admin/export` خروجی در پنل ادمین
+
+## احراز هویت ادمین
+
+- با API مسیر `/api/admin/login` انجام می شود.
+- سشن در کوکی `admin_token` ذخیره می شود.
+- middleware پروژه (`proxy.ts`) مسیرهای `/admin/*` را بدون کوکی به `/admin/login` ریدایرکت می کند.
+
+## مستندات تکمیلی
+
+- معماری: `docs/ARCHITECTURE.md`
+- مرجع API: `docs/API.md`
+- راهنمای مشارکت: `CONTRIBUTING.md`
+
+## نکات مهم برای توسعه تیمی
+
+- قبل از PR حتما `pnpm lint` و تست دستی مسیرهای تحت تاثیر را اجرا کنید.
+- مدل های دیتابیس فقط از طریق `prisma/schema.prisma` و migration تغییر کند.
+- APIهای جدید باید در `docs/API.md` ثبت شوند.
+
+## محدودیت ها / نکات فعلی
+
+- در صفحه `app/admin/export/page.tsx` گزینه `stats-json` به مسیر `/api/export/stats` اشاره می کند، اما در وضعیت فعلی این endpoint در `app/api/export` پیاده سازی نشده است.
+
+## License
+
+فعلا لایسنس صریحی برای پروژه تعریف نشده است.
