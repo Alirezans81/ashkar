@@ -29,58 +29,61 @@ export async function createTransaction(
   // Validate input
   const validatedInput = CreateTransactionSchema.parse(input);
 
-  // Get the last transaction to establish the chain
-  const lastTransaction = await prisma.transaction.findFirst({
-    orderBy: { createdAt: "desc" },
-  });
+  return prisma.$transaction(async (tx) => {
+    // Get the last transaction to establish the chain
+    const lastTransaction = await tx.transaction.findFirst({
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    });
 
-  // Prepare transaction data
-  const transactionData = {
-    amount: validatedInput.amount,
-    currency: validatedInput.currency,
-    type: validatedInput.type,
-    category: validatedInput.category,
-    description: validatedInput.description || null,
-    source: validatedInput.source,
-    destination: validatedInput.destination,
-    previousHash: lastTransaction?.hash || null,
-    createdById: input.createdById || null, // Associate with user if provided
-  };
+    // Use a fixed timestamp for both hash generation and DB write
+    const createdAt = new Date();
 
-  // Generate hash for the new transaction
-  const hash = generateTransactionHash({
-    ...transactionData,
-    createdAt: new Date(), // Using current time for hash calculation
-  });
+    // Prepare transaction data
+    const transactionData = {
+      amount: validatedInput.amount,
+      currency: validatedInput.currency,
+      type: validatedInput.type,
+      category: validatedInput.category,
+      description: validatedInput.description || null,
+      source: validatedInput.source,
+      destination: validatedInput.destination,
+      previousHash: lastTransaction?.hash || null,
+      createdById: input.createdById || null, // Associate with user if provided
+      createdAt,
+    };
 
-  // Create the transaction in the database
-  const newTransaction = await prisma.transaction.create({
-    data: {
-      ...transactionData,
-      hash,
-      // Establish the chain link from the previous transaction
-      ...(lastTransaction && {
-        prevTransaction: {
-          connect: { id: lastTransaction.id },
-        },
-        nextTransaction: undefined, // Will be connected when the next transaction is created
-      }),
-    },
-  });
+    // Generate hash for the new transaction
+    const hash = generateTransactionHash(transactionData);
 
-  // Update the previous transaction to point to this one
-  if (lastTransaction) {
-    await prisma.transaction.update({
-      where: { id: lastTransaction.id },
+    // Create the transaction in the database
+    const newTransaction = await tx.transaction.create({
       data: {
-        nextTransaction: {
-          connect: { id: newTransaction.id },
-        },
+        ...transactionData,
+        hash,
+        // Establish the chain link from the previous transaction
+        ...(lastTransaction && {
+          prevTransaction: {
+            connect: { id: lastTransaction.id },
+          },
+          nextTransaction: undefined, // Will be connected when the next transaction is created
+        }),
       },
     });
-  }
 
-  return newTransaction;
+    // Update the previous transaction to point to this one
+    if (lastTransaction) {
+      await tx.transaction.update({
+        where: { id: lastTransaction.id },
+        data: {
+          nextTransaction: {
+            connect: { id: newTransaction.id },
+          },
+        },
+      });
+    }
+
+    return newTransaction;
+  });
 }
 
 /**
@@ -88,9 +91,7 @@ export async function createTransaction(
  */
 export async function getAllTransactions(): Promise<Transaction[]> {
   return prisma.transaction.findMany({
-    orderBy: {
-      createdAt: "asc",
-    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
   });
 }
 

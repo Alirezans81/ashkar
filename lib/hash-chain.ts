@@ -5,10 +5,13 @@ import { TransactionType } from '@prisma/client';
 // Define the transaction interface for hash calculation
 interface TransactionData {
   amount: Decimal;
+  currency: string;
   type: TransactionType;
   category: string;
+  description?: string | null;
   source: string;
   destination: string;
+  createdById?: string | null;
   createdAt: Date;
   previousHash?: string | null;
 }
@@ -19,6 +22,34 @@ interface TransactionData {
 export function generateTransactionHash(transactionData: TransactionData): string {
   const dataString = [
     transactionData.amount.toString(),
+    transactionData.currency,
+    transactionData.type,
+    transactionData.category,
+    transactionData.description || '',
+    transactionData.source,
+    transactionData.destination,
+    transactionData.createdById || '',
+    transactionData.createdAt.toISOString(),
+    transactionData.previousHash || ''
+  ].join('|');
+  
+  return createHash('sha256').update(dataString).digest('hex');
+}
+
+/**
+ * Legacy hash calculation kept for backward compatibility with old records.
+ */
+function generateTransactionHashLegacy(transactionData: {
+  amount: Decimal;
+  type: TransactionType;
+  category: string;
+  source: string;
+  destination: string;
+  createdAt: Date;
+  previousHash?: string | null;
+}): string {
+  const dataString = [
+    transactionData.amount.toString(),
     transactionData.type,
     transactionData.category,
     transactionData.source,
@@ -26,7 +57,7 @@ export function generateTransactionHash(transactionData: TransactionData): strin
     transactionData.createdAt.toISOString(),
     transactionData.previousHash || ''
   ].join('|');
-  
+
   return createHash('sha256').update(dataString).digest('hex');
 }
 
@@ -37,10 +68,13 @@ export function generateTransactionHash(transactionData: TransactionData): strin
 export function validateTransactionIntegrity(
   transaction: {
     amount: Decimal;
+    currency: string;
     type: TransactionType;
     category: string;
+    description?: string | null;
     source: string;
     destination: string;
+    createdById?: string | null;
     createdAt: Date;
     previousHash?: string | null;
     hash: string;
@@ -48,15 +82,32 @@ export function validateTransactionIntegrity(
 ): boolean {
   const calculatedHash = generateTransactionHash({
     amount: transaction.amount,
+    currency: transaction.currency,
+    type: transaction.type,
+    category: transaction.category,
+    description: transaction.description,
+    source: transaction.source,
+    destination: transaction.destination,
+    createdById: transaction.createdById,
+    createdAt: transaction.createdAt,
+    previousHash: transaction.previousHash
+  });
+
+  if (calculatedHash === transaction.hash) {
+    return true;
+  }
+
+  const legacyHash = generateTransactionHashLegacy({
+    amount: transaction.amount,
     type: transaction.type,
     category: transaction.category,
     source: transaction.source,
     destination: transaction.destination,
     createdAt: transaction.createdAt,
-    previousHash: transaction.previousHash
+    previousHash: transaction.previousHash,
   });
-  
-  return calculatedHash === transaction.hash;
+
+  return legacyHash === transaction.hash;
 }
 
 /**
@@ -66,10 +117,13 @@ export async function verifyChainIntegrity(
   getAllTransactions: () => Promise<Array<{
     id: string;
     amount: Decimal;
+    currency: string;
     type: TransactionType;
     category: string;
+    description?: string | null;
     source: string;
     destination: string;
+    createdById?: string | null;
     createdAt: Date;
     previousHash?: string | null;
     hash: string;
@@ -77,7 +131,7 @@ export async function verifyChainIntegrity(
 ): Promise<{ isValid: boolean; invalidTransactions: string[] }> {
   const transactions = await getAllTransactions();
   const sortedTransactions = transactions.sort((a, b) => 
-    a.createdAt.getTime() - b.createdAt.getTime()
+    a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id)
   );
   
   const invalidTransactions: string[] = [];
